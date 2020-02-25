@@ -1,0 +1,74 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+apply plugin: 'com.jfrog.bintray'
+apply plugin: 'com.github.dcendents.android-maven'
+
+def vCode = 2
+def vName = '0.1.1'
+
+ext {
+    bintrayRepo = 'Novasa'
+    bintrayName = 'com.novasa.touchscaler'
+
+    libraryName = 'touchscaler'
+
+    publishedGroupId = 'com.novasa'
+    artifact = 'touchscaler'
+    libraryVersion = vName
+    libraryDescription = 'A touch listener for view scaling'
+
+    siteUrl = 'https://github.com/Novasa/TouchScaler'
+    gitUrl = 'https://github.com/Novasa/TouchScaler.git'
+
+    developerId = 'mhswtf'
+    developerName = 'Mikkel Schläger'
+    developerEmail = 'mikkel@novasa.com'
+
+    licenseName = 'The Apache Software License, Version 2.0'
+    licenseUrl = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+    allLicenses = ["Apache-2.0"]
+}
+
+android {
+    compileSdkVersion 29
+    buildToolsVersion "29.0.2"
+
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 29
+        versionCode vCode
+        versionName vName
+
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+
+    implementation 'androidx.core:core-ktx:1.2.0'
+    implementation 'androidx.dynamicanimation:dynamicanimation:1.0.0'
+}
+
+repositories {
+    mavenCentral()
+}
+
+if (project.rootProject.file('local.properties').exists()) {
+    // local.properties is not committed
+    // go to bintray.com -> login -> edit profile -> API key
+    // Format: (no brackets)
+    // bintray.user=[USERNAME]
+    // bintray.apikey=[API KEY]
+    apply from: 'https://raw.githubusercontent.com/nuuneoi/JCenter/master/installv1.gradle'
+    apply from: 'https://raw.githubusercontent.com/nuuneoi/JCenter/master/bintrayv1.gradle'
+}

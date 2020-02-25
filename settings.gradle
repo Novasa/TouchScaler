@@ -1,2 +1,2 @@
-include ':app', ':core'
-rootProject.name='touchscaler'
+include ':example', ':touchscaler'
+rootProject.name='TouchScaler'
