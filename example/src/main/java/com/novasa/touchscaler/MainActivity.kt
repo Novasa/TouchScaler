@@ -1,6 +1,5 @@
 package com.novasa.touchscaler
 
-import android.graphics.PointF
 import android.os.Bundle
 import android.util.Log
 import android.util.SizeF
@@ -26,17 +25,19 @@ class MainActivity : AppCompatActivity() {
         contentView.setOnTouchListener(touchScaler)
 
         buttonReset.setOnClickListener {
-            touchScaler.reset()
+            touchScaler.update()
+                .position(.5f, .5f)
+                .relative()
         }
 
         buttonTest.setOnClickListener {
-            touchScaler.scale(3f, PointF(contentView.width.toFloat(), 0f))
-            touchScaler.applyScaleAndTranslation()
+            touchScaler.update()
+                .scale(2f)
         }
 
         touchScaler.onChangeListener = object : TouchScaler.OnChangeListener {
             override fun onTouchScalerChange(scaler: TouchScaler) {
-
+                Log.d(TAG, "Translation: ${targetView.translationX}, ${targetView.translationY}")
             }
         }
 

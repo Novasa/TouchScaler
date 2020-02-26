@@ -1,8 +1,12 @@
 package com.novasa.touchscaler
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.TimeInterpolator
 import android.animation.ValueAnimator
 import android.graphics.PointF
 import android.os.Build
+import android.util.Log
 import android.util.SizeF
 import android.view.*
 import android.view.View.OnTouchListener
@@ -21,6 +25,8 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
         private const val DEFAULT_SCALE_MIN = 1f
         private const val DEFAULT_SCALE_MAX = 3f
+        private const val DEFAULT_ANIMATION_DURATION = 300L
+        private val DEFAULT_INTERPOLATOR = DecelerateInterpolator()
     }
 
     interface OnChangeListener {
@@ -31,11 +37,67 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         fun onTouchScalerModeChange(scaler: TouchScaler, mode: Mode)
     }
 
+    class Update {
+
+        internal var x: Float? = null
+        internal var y: Float? = null
+        internal var relative = false
+        internal var scale: Float? = null
+        internal var duration: Long? = DEFAULT_ANIMATION_DURATION
+        internal var delay: Long? = null
+        internal var interpolator: TimeInterpolator? = null
+        internal var next: Update? = null
+
+        fun position(x: Float, y: Float) = this.also {
+            it.x = x
+            it.y = y
+        }
+
+        fun relative() = this.also {
+            it.relative = true
+        }
+
+        fun scale(scale: Float) = this.also {
+            it.scale = scale
+        }
+
+        fun duration(duration: Long) = this.also {
+            it.duration = duration
+        }
+
+        fun delay(delay: Long) = this.also {
+            it.delay = delay
+        }
+
+        fun interp(interpolator: TimeInterpolator) = this.also {
+            it.interpolator = interpolator
+        }
+
+        fun animate(animate: Boolean) = this.also {
+            it.duration = if (animate) it.duration ?: DEFAULT_ANIMATION_DURATION else null
+        }
+
+        fun noAnimation() = animate(false)
+
+        fun reset() = position(.5f, .5f)
+            .relative()
+            .scale(1f)
+
+        fun next() = Update().also {
+            this.next = it
+        }
+
+        override fun toString(): String {
+            return "Update(x=$x, y=$y, scale=$scale, duration=$duration, next?=${next != null})"
+        }
+    }
+
     enum class Mode {
         NONE,
         DRAG,
         ZOOM,
-        FLING
+        FLING,
+        ANIMATE
     }
 
     init {
@@ -71,6 +133,8 @@ class TouchScaler(val targetView: View) : OnTouchListener {
                 onModeChangeListener?.onTouchScalerModeChange(this, value)
             }
         }
+
+    val focusPointOffset = PointF(.5f, .5f)
 
     private lateinit var prevEventPosition: PointF
     private val translation: PointF = PointF()
@@ -181,7 +245,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             }
         })
 
-    fun scale(factor: Float, focus: PointF) {
+    private fun scale(factor: Float, focus: PointF) {
         val prevScale = scale
         scale *= factor
         scale = clamp(scale, scaleMin, scaleMax)
@@ -235,6 +299,18 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         start()
     }
 
+    private fun cancelFling() {
+        flingX?.cancel()?.run {
+            flingX = null
+            onFlingEnded()
+        }
+
+        flingY?.cancel()?.run {
+            flingY = null
+            onFlingEnded()
+        }
+    }
+
     private fun onFlingEnded() {
         if (isFlinging && mode == Mode.FLING) {
             mode = Mode.NONE
@@ -265,7 +341,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         translationMax.y = overflowSize.height
     }
 
-    fun applyScaleAndTranslation() {
+    private fun applyScaleAndTranslation() {
         targetView.apply {
 
             pivotX = 0f
@@ -299,53 +375,132 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     }
 
     private fun cancelAnimations() {
-        targetView.animate().cancel()
-
-        flingX?.cancel()?.run {
-            flingX = null
-            onFlingEnded()
-        }
-
-        flingY?.cancel()?.run {
-            flingY = null
-            onFlingEnded()
-        }
+        cancelUpdate()
+        cancelFling()
     }
 
-    private var valueAnimator: ValueAnimator? = null
+    private var updateAnimator: ValueAnimator? = null
 
-    fun reset() {
-        resetAnimated()
+    fun update(): Update = Update().also {
+        targetView.post { applyUpdate(it) }
     }
 
-    private fun resetAnimated() {
+    fun applyUpdate(update: Update) {
 
-        valueAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 200
-            interpolator = DecelerateInterpolator()
+        cancelFling()
+        updateSizes()
 
-            val s0 = scale
-            val s1 = 1f
+        Log.d(TAG, "Applying update: $update")
 
-            val x0 = targetView.translationX
-            val y0 = targetView.translationY
+        val s1 = update.scale
 
-            addUpdateListener { animator ->
-                val f = animator.animatedFraction
+        val sc1 = s1 ?: scale
 
-                // Denormalize between start and end value
-                scale = f * (s1 - s0) + s0
-                applyScaleAndTranslation()
+        val x1 = update.x?.let { x ->
+            (x.let {
+                if (update.relative) it * contentSize.width
+                else it
+            } - overflowSize.width) * sc1 - focusPointOffset.x * viewSize.width
+        }
 
-                targetView.translationX = (1f - f) * x0
-                targetView.translationY = (1f - f) * y0
-                clampTranslation()
+        val y1 = update.y?.let { y ->
+            (y.let {
+                if (update.relative) it * contentSize.height
+                else it
+            } - overflowSize.height) * sc1 - focusPointOffset.y * viewSize.height
+        }
 
-                notifyChange()
+        val duration = update.duration ?: 0L
+
+        if (duration > 0L) {
+            updateAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                this.duration = duration
+                this.interpolator = update.interpolator ?: DEFAULT_INTERPOLATOR
+
+                update.delay?.let { delay ->
+                    this.startDelay = delay
+                }
+
+                val s0 = scale
+                val x0 = targetView.translationX
+                val y0 = targetView.translationY
+
+                addUpdateListener { animator ->
+                    val f = animator.animatedFraction
+
+                    // Denormalize between start and end value
+                    s1?.let { s1 ->
+                        scale = f * (s1 - s0) + s0
+                        applyScaleAndTranslation()
+                    }
+
+                    x1?.let {
+                        targetView.translationX = (f * (it - x0) + x0)
+                    }
+
+                    y1?.let {
+                        targetView.translationY = (f * (it - y0) + y0)
+                    }
+
+                    clampTranslation()
+                    notifyChange()
+                }
+
+                addListener(object : AnimatorListenerAdapter() {
+
+                    override fun onAnimationStart(animation: Animator) {
+                        mode = Mode.ANIMATE
+                    }
+
+                    override fun onAnimationEnd(animation: Animator) {
+                        updateAnimator = null
+                        onUpdateEnd(update)
+                    }
+                })
+
+                start()
             }
 
-            start()
+        } else {
+            s1?.let { s ->
+                scale = s
+                applyScaleAndTranslation()
+            }
+
+            x1?.let { x ->
+                targetView.translationX = (x - focusPointOffset.x * viewSize.width) * scale
+            }
+
+            y1?.let { y ->
+                targetView.translationY = (y - focusPointOffset.y * viewSize.height) * scale
+            }
+
+            clampTranslation()
+            notifyChange()
+
+            onUpdateEnd(update)
         }
+    }
+
+    private fun onUpdateEnd(update: Update) {
+        update.next?.let { next ->
+            applyUpdate(next)
+
+        } ?: onUpdateEnd()
+    }
+
+    private fun onUpdateEnd() {
+        if (mode == Mode.ANIMATE) {
+            mode = Mode.NONE
+        }
+    }
+
+    private fun cancelUpdate() {
+        updateAnimator?.cancel()?.also {
+            updateAnimator = null
+        }
+
+        onUpdateEnd()
     }
 
     // region Utility
