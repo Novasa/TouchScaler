@@ -53,6 +53,12 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         }
         set(value) {
             field = SizeF(value.width, value.height)
+            targetView.apply {
+                val lp = layoutParams
+                lp.width = value.width.roundToInt()
+                lp.height = value.height.roundToInt()
+                layoutParams = lp
+            }
         }
 
     private var viewSize: SizeF = SizeF(0f, 0f)
@@ -92,15 +98,14 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             return false
         }
 
+        val action = event.actionMasked
         val eventPosition = PointF(event.rawX, event.rawY)
 
-        when (event.actionMasked) {
+        when (action) {
             MotionEvent.ACTION_DOWN -> {
-                cancelAnimations()
-
                 v.parent.requestDisallowInterceptTouchEvent(true)
-
                 mode = Mode.DRAG
+                cancelAnimations()
             }
 
             MotionEvent.ACTION_POINTER_DOWN -> {
@@ -134,11 +139,6 @@ class TouchScaler(val targetView: View) : OnTouchListener {
                     }
                 }
             }
-
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                mode = Mode.NONE
-                v.parent.requestDisallowInterceptTouchEvent(false)
-            }
         }
 
         updateSizes()
@@ -148,6 +148,15 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
         if (mode != Mode.NONE) {
             applyScaleAndTranslation()
+        }
+
+        when (action) {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (!isFlinging) {
+                    mode = Mode.NONE
+                }
+                v.parent.requestDisallowInterceptTouchEvent(false)
+            }
         }
 
         prevEventPosition = eventPosition
@@ -192,6 +201,8 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
     private var flingX: FlingAnimation? = null
     private var flingY: FlingAnimation? = null
+    private val isFlinging: Boolean
+        get() = flingX != null || flingY != null
 
     private fun fling(vx: Float, vy: Float) {
         mode = Mode.FLING
@@ -205,13 +216,8 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         })
     }
 
-    private fun createFlingAnimation(
-        property: FloatPropertyCompat<View>,
-        min: Float,
-        max: Float,
-        v: Float,
-        onEnd: () -> Unit
-    ): FlingAnimation = FlingAnimation(targetView, property).apply {
+    private fun createFlingAnimation(property: FloatPropertyCompat<View>, min: Float, max: Float, v: Float, onEnd: () -> Unit): FlingAnimation = FlingAnimation(targetView, property).apply {
+
         setMinValue(min)
         setMaxValue(max)
         setStartVelocity(v)
@@ -230,7 +236,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     }
 
     private fun onFlingEnded() {
-        if (flingX == null && flingY == null && mode == Mode.FLING) {
+        if (isFlinging && mode == Mode.FLING) {
             mode = Mode.NONE
         }
     }
@@ -262,8 +268,8 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     fun applyScaleAndTranslation() {
         targetView.apply {
 
-            pivotX = -overflowSize.width
-            pivotY = -overflowSize.height
+            pivotX = 0f
+            pivotY = 0f
 
             translationX += translation.x
             translationY += translation.y
