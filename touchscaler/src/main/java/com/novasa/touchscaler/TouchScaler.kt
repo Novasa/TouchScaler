@@ -3,7 +3,6 @@ package com.novasa.touchscaler
 import android.animation.ValueAnimator
 import android.graphics.PointF
 import android.os.Build
-import android.util.Log
 import android.util.SizeF
 import android.view.*
 import android.view.View.OnTouchListener
@@ -13,6 +12,7 @@ import androidx.dynamicanimation.animation.FlingAnimation
 import androidx.dynamicanimation.animation.FloatPropertyCompat
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 class TouchScaler(val targetView: View) : OnTouchListener {
 
@@ -23,10 +23,19 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         private const val DEFAULT_SCALE_MAX = 3f
     }
 
+    interface OnChangeListener {
+        fun onTouchScalerChange(scaler: TouchScaler)
+    }
+
+    interface OnModeChangeListener {
+        fun onTouchScalerModeChange(scaler: TouchScaler, mode: Mode)
+    }
+
     enum class Mode {
         NONE,
         DRAG,
-        ZOOM
+        ZOOM,
+        FLING
     }
 
     init {
@@ -50,7 +59,12 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     private var overflowSize: SizeF = SizeF(0f, 0f)
 
     var mode: Mode = Mode.NONE
-        private set
+        private set(value) {
+            if (value != field) {
+                field = value
+                onModeChangeListener?.onTouchScalerModeChange(this, value)
+            }
+        }
 
     private lateinit var prevEventPosition: PointF
     private val translation: PointF = PointF()
@@ -63,6 +77,12 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     private var scale = 1f
     private var prevFocus: PointF? = null
 
+    var onChangeListener: OnChangeListener? = null
+    var onModeChangeListener: OnModeChangeListener? = null
+
+    private fun notifyChange() {
+        onChangeListener?.onTouchScalerChange(this)
+    }
 
     override fun onTouch(v: View, event: MotionEvent): Boolean {
 
@@ -163,8 +183,8 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
             // Pivot point is always at content (0,0), so we have to translate when scaling, to account for it.
             // The last term is to account for the overflow
-            translation.x = (targetView.translationX - focus.x) * scaled - overflowSize.width * scaled
-            translation.y = (targetView.translationY - focus.y) * scaled - overflowSize.height * scaled
+            translation.x = (targetView.translationX - focus.x - overflowSize.width) * scaled
+            translation.y = (targetView.translationY - focus.y - overflowSize.height) * scaled
         }
 
         prevFocus = focus
@@ -174,32 +194,45 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     private var flingY: FlingAnimation? = null
 
     private fun fling(vx: Float, vy: Float) {
-        flingX = createFlingAnimation(
-            DynamicAnimation.TRANSLATION_X,
-            translationMin.x,
-            translationMax.x,
-            vx
-        )
-        flingY = createFlingAnimation(
-            DynamicAnimation.TRANSLATION_Y,
-            translationMin.y,
-            translationMax.y,
-            vy
-        )
+        mode = Mode.FLING
+
+        flingX = createFlingAnimation(DynamicAnimation.TRANSLATION_X, translationMin.x, translationMax.x, vx, onEnd = {
+            flingX = null
+        })
+
+        flingY = createFlingAnimation(DynamicAnimation.TRANSLATION_Y, translationMin.y, translationMax.y, vy, onEnd = {
+            flingY = null
+        })
     }
 
     private fun createFlingAnimation(
         property: FloatPropertyCompat<View>,
         min: Float,
         max: Float,
-        v: Float
+        v: Float,
+        onEnd: () -> Unit
     ): FlingAnimation = FlingAnimation(targetView, property).apply {
         setMinValue(min)
         setMaxValue(max)
         setStartVelocity(v)
         friction = 1.1f
 
+        addEndListener { _, _, _, _ ->
+            onEnd()
+            onFlingEnded()
+        }
+
+        addUpdateListener { _, _, _ ->
+            notifyChange()
+        }
+
         start()
+    }
+
+    private fun onFlingEnded() {
+        if (flingX == null && flingY == null && mode == Mode.FLING) {
+            mode = Mode.NONE
+        }
     }
 
     private fun updateSizes(force: Boolean = false) {
@@ -240,10 +273,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             scaleX = scale
             scaleY = scale
 
-            Log.d(
-                TAG,
-                "Scale: $scale, translation: [$translation] -> [$translationX, $translationY], pivot: [$pivotX, $pivotY], content: $contentSize, overflow: $overflowSize"
-            )
+            notifyChange()
 
 //            // Scaling calculations are done with pivot point at (0,0), but we want to center the view when scale is < 1
 //            pivotX = if (scale >= 1f) 0f else width * .5f
@@ -265,11 +295,15 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     private fun cancelAnimations() {
         targetView.animate().cancel()
 
-        flingX?.cancel()
-        flingX = null
+        flingX?.cancel()?.run {
+            flingX = null
+            onFlingEnded()
+        }
 
-        flingY?.cancel()
-        flingY = null
+        flingY?.cancel()?.run {
+            flingY = null
+            onFlingEnded()
+        }
     }
 
     private var valueAnimator: ValueAnimator? = null
@@ -300,6 +334,8 @@ class TouchScaler(val targetView: View) : OnTouchListener {
                 targetView.translationX = (1f - f) * x0
                 targetView.translationY = (1f - f) * y0
                 clampTranslation()
+
+                notifyChange()
             }
 
             start()
