@@ -20,6 +20,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+@Suppress("unused", "MemberVisibilityCanBePrivate")
 class TouchScaler(val targetView: View) : OnTouchListener {
 
     companion object {
@@ -39,59 +40,6 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
     interface OnModeChangeListener {
         fun onTouchScalerModeChange(scaler: TouchScaler, mode: Mode)
-    }
-
-    class Update {
-
-        internal var position: PointF? = null
-        internal var relative = false
-        internal var scale: Float? = null
-        internal var duration: Long? = DEFAULT_ANIMATION_DURATION
-        internal var delay: Long? = null
-        internal var interpolator: TimeInterpolator? = null
-        internal var next: Update? = null
-
-        fun position(x: Float, y: Float) = this.also {
-            position = PointF(x, y)
-        }
-
-        fun relative() = this.also {
-            it.relative = true
-        }
-
-        fun scale(scale: Float) = this.also {
-            it.scale = scale
-        }
-
-        fun duration(duration: Long) = this.also {
-            it.duration = duration
-        }
-
-        fun delay(delay: Long) = this.also {
-            it.delay = delay
-        }
-
-        fun interp(interpolator: TimeInterpolator) = this.also {
-            it.interpolator = interpolator
-        }
-
-        fun animate(animate: Boolean) = this.also {
-            it.duration = if (animate) it.duration ?: DEFAULT_ANIMATION_DURATION else null
-        }
-
-        fun noAnimation() = animate(false)
-
-        fun reset() = position(.5f, .5f)
-            .relative()
-            .scale(1f)
-
-        fun next() = Update().also {
-            this.next = it
-        }
-
-        override fun toString(): String {
-            return "Update(position=$position, scale=$scale, duration=$duration, next?=${next != null})"
-        }
     }
 
     enum class Mode {
@@ -428,6 +376,78 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
 
     // region Updates
+
+    class Update {
+
+        @JvmSynthetic
+        internal var position: PointF? = null
+
+        @JvmSynthetic
+        internal var relative = false
+
+        @JvmSynthetic
+        internal var scale: Float? = null
+
+        @JvmSynthetic
+        internal var duration: Long? = DEFAULT_ANIMATION_DURATION
+
+        @JvmSynthetic
+        internal var delay: Long? = null
+
+        @JvmSynthetic
+        internal var interpolator: TimeInterpolator? = null
+
+        @JvmSynthetic
+        internal var next: Update? = null
+
+        fun position(position: PointF) = this.apply {
+            this.position = position
+        }
+
+        fun position(x: Float, y: Float) = position(PointF(x, y))
+
+        fun relative() = this.apply {
+            this.relative = true
+        }
+
+        fun scale(scale: Float) = this.apply {
+            this.scale = scale
+        }
+
+        fun duration(duration: Long) = this.apply {
+            this.duration = duration
+        }
+
+        fun delay(delay: Long) = this.apply {
+            this.delay = delay
+        }
+
+        fun interp(interpolator: TimeInterpolator) = this.apply {
+            this.interpolator = interpolator
+        }
+
+        fun animate(animate: Boolean) = this.apply {
+            this.duration = if (animate) this.duration ?: DEFAULT_ANIMATION_DURATION else null
+        }
+
+        fun noAnimation() = animate(false)
+
+        fun reset() = position(.5f, .5f)
+            .relative()
+            .scale(1f)
+
+        fun next() = Update().also {
+            this.next = it
+        }
+
+        fun next(update: Update) = this.apply {
+            this.next = update
+        }
+
+        override fun toString(): String {
+            return "Update(position=$position, scale=$scale, duration=$duration, next?=${next != null})"
+        }
+    }
 
     private var updateAnimator: UpdateAnimator? = null
 
