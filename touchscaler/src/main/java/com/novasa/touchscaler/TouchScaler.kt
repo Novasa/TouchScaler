@@ -27,6 +27,8 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         private const val DEFAULT_SCALE_MAX = 3f
         private const val DEFAULT_ANIMATION_DURATION = 300L
         private val DEFAULT_INTERPOLATOR = DecelerateInterpolator()
+
+        private val SIZE_NONE = SizeF(0f, 0f)
     }
 
     interface OnChangeListener {
@@ -39,8 +41,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
     class Update {
 
-        internal var x: Float? = null
-        internal var y: Float? = null
+        internal var position: PointF? = null
         internal var relative = false
         internal var scale: Float? = null
         internal var duration: Long? = DEFAULT_ANIMATION_DURATION
@@ -49,8 +50,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         internal var next: Update? = null
 
         fun position(x: Float, y: Float) = this.also {
-            it.x = x
-            it.y = y
+            position = PointF(x, y)
         }
 
         fun relative() = this.also {
@@ -88,7 +88,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         }
 
         override fun toString(): String {
-            return "Update(x=$x, y=$y, scale=$scale, duration=$duration, next?=${next != null})"
+            return "Update(position=$position, scale=$scale, duration=$duration, next?=${next != null})"
         }
     }
 
@@ -101,12 +101,15 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     }
 
     init {
-        (targetView.parent as? ViewGroup)?.let {
-            it.clipChildren = false
+        targetView.apply {
+            pivotX = 0f
+            pivotY = 0f
+
+            (parent as? ViewGroup)?.clipChildren = false
         }
     }
 
-    var contentSize: SizeF = SizeF(0f, 0f)
+    var contentSize: SizeF = SIZE_NONE
         get() {
             if (field.width == 0f || field.height == 0f) {
                 field = SizeF(targetView.width.toFloat(), targetView.height.toFloat())
@@ -121,10 +124,29 @@ class TouchScaler(val targetView: View) : OnTouchListener {
                 lp.height = value.height.roundToInt()
                 layoutParams = lp
             }
+            overflowSize = SIZE_NONE
+            updateTranslationBoundaries()
         }
 
-    private var viewSize: SizeF = SizeF(0f, 0f)
-    private var overflowSize: SizeF = SizeF(0f, 0f)
+    private var viewSize: SizeF = SIZE_NONE
+        get() {
+            if (field.width == 0f || field.height == 0f) {
+                (targetView.parent as? View)?.let { parent ->
+                    field = SizeF(parent.width.toFloat(), parent.height.toFloat())
+                    overflowSize = SIZE_NONE
+                }
+            }
+            return field
+        }
+
+    /** Overflow size is how much the content spills over the view size on each side */
+    private var overflowSize: SizeF = SIZE_NONE
+        get() {
+            if (field.width == 0f || field.height == 0f) {
+                field = SizeF((contentSize.width - viewSize.width) * .5f, (contentSize.height - viewSize.height) * .5f)
+            }
+            return field
+        }
 
     var mode: Mode = Mode.NONE
         private set(value) {
@@ -136,15 +158,34 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
     val focusPointOffset = PointF(.5f, .5f)
 
+    val currentFocusPoint: PointF
+        get() = translationToFocusPoint(currentTranslation, currentScale)
+
     private lateinit var prevEventPosition: PointF
     private val translation: PointF = PointF()
     private val translationMin: PointF = PointF()
     private val translationMax: PointF = PointF()
 
+    var currentTranslation: PointF
+        get() = PointF(targetView.translationX, targetView.translationY)
+        private set(value) = targetView.run {
+            translationX = value.x
+            translationY = value.y
+        }
+
     var scaleMin = DEFAULT_SCALE_MIN
     var scaleMax = DEFAULT_SCALE_MAX
 
-    private var scale = 1f
+    var currentScale: Float
+        get() = targetView.scaleX
+        set(value) {
+            targetView.apply {
+                scaleX = value
+                scaleY = value
+            }
+            updateTranslationBoundaries()
+        }
+
     private var prevFocus: PointF? = null
 
     var onChangeListener: OnChangeListener? = null
@@ -155,6 +196,8 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     }
 
     override fun onTouch(v: View, event: MotionEvent): Boolean {
+
+        updateTranslationBoundaries()
 
         if (event.pointerCount > 2) {
             mode = Mode.NONE
@@ -205,13 +248,11 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             }
         }
 
-        updateSizes()
-
         scaleDetector.onTouchEvent(event)
         flingDetector.onTouchEvent(event)
 
         if (mode != Mode.NONE) {
-            applyScaleAndTranslation()
+            applyTranslation()
         }
 
         when (action) {
@@ -246,11 +287,10 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         })
 
     private fun scale(factor: Float, focus: PointF) {
-        val prevScale = scale
-        scale *= factor
-        scale = clamp(scale, scaleMin, scaleMax)
+        val s0 = currentScale
+        val s1 = clamp(s0 * factor, scaleMin, scaleMax)
 
-        if (scale != prevScale) {
+        if (s1 != s0) {
 
             val scaled = factor - 1f
 
@@ -258,6 +298,8 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             // The last term is to account for the overflow
             translation.x = (targetView.translationX - focus.x - overflowSize.width) * scaled
             translation.y = (targetView.translationY - focus.y - overflowSize.height) * scaled
+
+            currentScale = s1
         }
 
         prevFocus = focus
@@ -317,44 +359,23 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         }
     }
 
-    private fun updateSizes(force: Boolean = false) {
-
-        if (force || viewSize.width == 0f || viewSize.height == 0f) {
-            viewSize = (targetView.parent as? View)?.let {
-                SizeF(it.width.toFloat(), it.height.toFloat())
-            } ?: SizeF(0f, 0f)
-        }
-
-        if (force || overflowSize.width == 0f || overflowSize.height == 0f) {
-            // Overflow size is how much the content spills over the view size on each side
-            overflowSize = SizeF(
-                (contentSize.width - viewSize.width) * .5f,
-                (contentSize.height - viewSize.height) * .5f
-            )
-        }
+    private fun updateTranslationBoundaries() {
 
         // Calculate the max translation based on scale and content size relative to view size
-        translationMin.x = -(overflowSize.width + contentSize.width * (scale - 1f))
-        translationMin.y = -(overflowSize.height + contentSize.height * (scale - 1f))
+        translationMin.x = -(overflowSize.width + contentSize.width * (currentScale - 1f))
+        translationMin.y = -(overflowSize.height + contentSize.height * (currentScale - 1f))
 
         translationMax.x = overflowSize.width
         translationMax.y = overflowSize.height
     }
 
-    private fun applyScaleAndTranslation() {
+    private fun applyTranslation() {
         targetView.apply {
-
-            pivotX = 0f
-            pivotY = 0f
 
             translationX += translation.x
             translationY += translation.y
 
             clampTranslation()
-
-            scaleX = scale
-            scaleY = scale
-
             notifyChange()
 
 //            // Scaling calculations are done with pivot point at (0,0), but we want to center the view when scale is < 1
@@ -379,7 +400,9 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         cancelFling()
     }
 
-    private var updateAnimator: ValueAnimator? = null
+    // region Updates
+
+    private var updateAnimator: UpdateAnimator? = null
 
     fun update(): Update = Update().also {
         targetView.post { applyUpdate(it) }
@@ -388,32 +411,26 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     fun applyUpdate(update: Update) {
 
         cancelFling()
-        updateSizes()
 
-        Log.d(TAG, "Applying update: $update")
+        val s1 = update.scale ?: currentScale
+        val p1 = update.position?.let {
+            PointF(it.x, it.y).also { p1 ->
+                if (update.relative) {
+                    p1.x *= contentSize.width
+                    p1.y *= contentSize.height
+                }
 
-        val s1 = update.scale
-
-        val sc1 = s1 ?: scale
-
-        val x1 = update.x?.let { x ->
-            (x.let {
-                if (update.relative) it * contentSize.width
-                else it
-            } - overflowSize.width) * sc1 - focusPointOffset.x * viewSize.width
+                // We animate the focus point, and translate it after
+                focusPointToTranslation(p1, s1)
+            }
         }
 
-        val y1 = update.y?.let { y ->
-            (y.let {
-                if (update.relative) it * contentSize.height
-                else it
-            } - overflowSize.height) * sc1 - focusPointOffset.y * viewSize.height
-        }
+        Log.d(TAG, "Applying update: $update, p1: $p1")
 
         val duration = update.duration ?: 0L
 
         if (duration > 0L) {
-            updateAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            updateAnimator = UpdateAnimator().apply {
                 this.duration = duration
                 this.interpolator = update.interpolator ?: DEFAULT_INTERPOLATOR
 
@@ -421,25 +438,25 @@ class TouchScaler(val targetView: View) : OnTouchListener {
                     this.startDelay = delay
                 }
 
-                val s0 = scale
-                val x0 = targetView.translationX
-                val y0 = targetView.translationY
+                val s0 = currentScale
+                val p0 = currentFocusPoint
 
                 addUpdateListener { animator ->
+
                     val f = animator.animatedFraction
 
-                    // Denormalize between start and end value
-                    s1?.let { s1 ->
-                        scale = f * (s1 - s0) + s0
-                        applyScaleAndTranslation()
+                    val s = f * (s1 - s0) + s0
+                    if (s1 != s0) {
+                        currentScale = s
                     }
 
-                    x1?.let {
-                        targetView.translationX = (f * (it - x0) + x0)
-                    }
+                    p1?.let { p1: PointF ->
+                        val p = PointF().apply {
+                            x = (f * (p1.x - p0.x) + p0.x)
+                            y = (f * (p1.y - p0.y) + p0.y)
+                        }
 
-                    y1?.let {
-                        targetView.translationY = (f * (it - y0) + y0)
+                        currentTranslation = focusPointToTranslation(p, s)
                     }
 
                     clampTranslation()
@@ -454,7 +471,12 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
                     override fun onAnimationEnd(animation: Animator) {
                         updateAnimator = null
-                        onUpdateEnd(update)
+
+                        (animation as? UpdateAnimator)?.let {
+                            if (!it.isCancelled) {
+                                onUpdateEnd(update)
+                            }
+                        }
                     }
                 })
 
@@ -462,17 +484,12 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             }
 
         } else {
-            s1?.let { s ->
-                scale = s
-                applyScaleAndTranslation()
+            if (s1 != currentScale) {
+                currentScale = s1
             }
 
-            x1?.let { x ->
-                targetView.translationX = (x - focusPointOffset.x * viewSize.width) * scale
-            }
-
-            y1?.let { y ->
-                targetView.translationY = (y - focusPointOffset.y * viewSize.height) * scale
+            p1?.let {
+                currentTranslation = focusPointToTranslation(it, currentScale)
             }
 
             clampTranslation()
@@ -503,9 +520,36 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         onUpdateEnd()
     }
 
+    private class UpdateAnimator : ValueAnimator() {
+
+        var isCancelled = false
+
+        init {
+            setFloatValues(0f, 1f)
+        }
+
+        override fun cancel() {
+            isCancelled = true
+            super.cancel()
+        }
+    }
+
+    // endregion
+
+
     // region Utility
 
     private fun clamp(v: Float, min: Float, max: Float): Float = min(max(v, min), max)
+
+    private fun focusPointToTranslation(focus: PointF, scale: Float): PointF = PointF().apply {
+        x = overflowSize.width - focus.x * scale + focusPointOffset.x * viewSize.width
+        y = overflowSize.height - focus.y * scale + focusPointOffset.y * viewSize.height
+    }
+
+    private fun translationToFocusPoint(translation: PointF, scale: Float) = PointF().apply {
+        x = (overflowSize.width - translation.x + focusPointOffset.x * viewSize.width) / scale
+        y = (overflowSize.height - translation.y + focusPointOffset.y * viewSize.height) / scale
+    }
 
     // endregion
 }

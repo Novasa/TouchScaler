@@ -3,6 +3,7 @@ package com.novasa.touchscaler
 import android.os.Bundle
 import android.util.Log
 import android.util.SizeF
+import android.view.animation.AccelerateDecelerateInterpolator
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.android.synthetic.main.activity_main.*
 
@@ -26,8 +27,16 @@ class MainActivity : AppCompatActivity() {
 
         buttonReset.setOnClickListener {
             touchScaler.update()
+                .position(0f, 100f)
+                .duration(1000)
+                .scale(2f)
+                .next()
+                .delay(200)
                 .position(.5f, .5f)
+                .duration(1000)
                 .relative()
+                .interp(AccelerateDecelerateInterpolator())
+                .scale(1f)
         }
 
         buttonTest.setOnClickListener {
@@ -37,7 +46,7 @@ class MainActivity : AppCompatActivity() {
 
         touchScaler.onChangeListener = object : TouchScaler.OnChangeListener {
             override fun onTouchScalerChange(scaler: TouchScaler) {
-                Log.d(TAG, "Translation: ${targetView.translationX}, ${targetView.translationY}")
+                Log.d(TAG, "Translation: ${scaler.currentTranslation}, scale: ${scaler.currentScale}, focus: ${scaler.currentFocusPoint} relative: ${scaler.currentFocusPoint / scaler.contentSize}")
             }
         }
 
