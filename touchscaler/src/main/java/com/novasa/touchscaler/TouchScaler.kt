@@ -32,6 +32,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         private val DEFAULT_INTERPOLATOR = DecelerateInterpolator()
 
         private val SIZE_NONE = SizeF(0f, 0f)
+        private val ORIGIN = PointF()
     }
 
     interface OnChangeListener {
@@ -79,7 +80,10 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             } ?: SizeF(0f, 0f)
 
             updateTranslationBoundaries()
-            currentTranslation = focusPointToTranslation(PointF(contentSize.width * .5f, contentSize.height * .5f), currentScale)
+            currentTranslation = focusPointToTranslation(
+                PointF(contentSize.width * .5f, contentSize.height * .5f),
+                currentScale
+            )
         }
     }
 
@@ -108,7 +112,6 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     val currentFocusPoint: PointF
         get() = translationToFocusPoint(currentTranslation, currentScale)
 
-    private var prevFocus: PointF? = null
 
     var onChangeListener: OnChangeListener? = null
     var onModeChangeListener: OnModeChangeListener? = null
@@ -151,7 +154,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
             MotionEvent.ACTION_POINTER_UP -> {
                 mode = Mode.DRAG
-                prevFocus = null
+                prevScaleFocus = null
 
                 // Action index is the index of the finger that is being lifted after scaling.
                 // We want to reset the focus point to the other, remaining finger, to avoid the view jumping from scale focus to event position.
@@ -260,6 +263,8 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             updateTranslationBoundaries()
         }
 
+    private var prevScaleFocus: PointF? = null
+
     private val scaleDetector = ScaleGestureDetector(
         targetView.context,
         object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -273,20 +278,21 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         val s0 = currentScale
         val s1 = clamp(s0 * factor, scaleMin, scaleMax)
 
-        if (s1 != s0) {
+        val scaled = factor - 1f
 
-            val scaled = factor - 1f
+        val dFocus = prevScaleFocus?.let {
+            focus - it
+        } ?: ORIGIN
 
-            // Pivot point is always at content (0,0), so we have to translate when scaling, to account for it.
-            // The last term is to account for the overflow
-            val currentTranslation = currentTranslation
-            translation.x = (currentTranslation.x - focus.x) * scaled
-            translation.y = (currentTranslation.y - focus.y) * scaled
+        // Pivot point is always at content (0,0), so we have to translate when scaling, to account for it.
+        // The last term is to account for the overflow
+        val currentTranslation = currentTranslation
+        translation.x = (currentTranslation.x - focus.x) * scaled + dFocus.x
+        translation.y = (currentTranslation.y - focus.y) * scaled + dFocus.y
 
-            currentScale = s1
-        }
+        currentScale = s1
 
-        prevFocus = focus
+        prevScaleFocus = focus
     }
 
     // endregion
@@ -585,7 +591,9 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
     // region Utility
 
-    private fun clamp(v: PointF, min: PointF, max: PointF): PointF = PointF(min(max(v.x, min.x), max.x), min(max(v.y, min.y), max.y))
+    private fun clamp(v: PointF, min: PointF, max: PointF): PointF =
+        PointF(min(max(v.x, min.x), max.x), min(max(v.y, min.y), max.y))
+
     private fun clamp(v: Float, min: Float, max: Float): Float = min(max(v, min), max)
 
     private fun focusPointToTranslation(focus: PointF, scale: Float): PointF =
