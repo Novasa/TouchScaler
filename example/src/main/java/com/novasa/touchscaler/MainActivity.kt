@@ -27,6 +27,10 @@ class MainActivity : AppCompatActivity() {
 
         buttonReset.setOnClickListener {
             touchScaler.update()
+                .position(.5f, .5f)
+                .scale(1f)
+                .relative()
+                .next()
                 .position(0f, 100f)
                 .duration(1000)
                 .scale(2f)
