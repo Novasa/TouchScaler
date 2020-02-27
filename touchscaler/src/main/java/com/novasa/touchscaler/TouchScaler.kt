@@ -131,6 +131,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             } ?: SizeF(0f, 0f)
 
             updateTranslationBoundaries()
+            currentTranslation = focusPointToTranslation(PointF(contentSize.width * .5f, contentSize.height * .5f), currentScale)
         }
     }
 
@@ -442,8 +443,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         val p1 = update.position?.let {
             PointF(it.x, it.y).also { p1 ->
                 if (update.relative) {
-                    p1.x *= contentSize.width
-                    p1.y *= contentSize.height
+                    p1 *= contentSize
                 }
 
                 // We animate the focus point, and translate it after
