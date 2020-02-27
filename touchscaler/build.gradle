@@ -4,8 +4,8 @@ apply plugin: 'kotlin-android-extensions'
 apply plugin: 'com.jfrog.bintray'
 apply plugin: 'com.github.dcendents.android-maven'
 
-def vCode = 5
-def vName = '0.1.4'
+def vCode = 6
+def vName = '0.1.5'
 
 ext {
     bintrayRepo = 'Novasa'
