@@ -278,19 +278,27 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         val s0 = currentScale
         val s1 = clamp(s0 * factor, scaleMin, scaleMax)
 
-        val scaled = factor - 1f
+        // The adjusted amount that the scale will change.
+        // This will be 0 if there is no change, so the only translation happening will be focus point change
+        val scaled = (s1 / s0) - 1f
 
+        // We add translation for focus point change
         val dFocus = prevScaleFocus?.let {
             focus - it
         } ?: ORIGIN
 
         // Pivot point is always at content (0,0), so we have to translate when scaling, to account for it.
-        // The last term is to account for the overflow
         val currentTranslation = currentTranslation
         translation.x = (currentTranslation.x - focus.x) * scaled + dFocus.x
         translation.y = (currentTranslation.y - focus.y) * scaled + dFocus.y
 
-        currentScale = s1
+        if (s1 == scaleMax && translation.x != 0f) {
+            Log.d(TAG, "$ -> $translation")
+        }
+
+        if (s1 != currentScale) {
+            currentScale = s1
+        }
 
         prevScaleFocus = focus
     }
