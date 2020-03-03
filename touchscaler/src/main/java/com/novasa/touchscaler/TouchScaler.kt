@@ -106,27 +106,6 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             }
         }
 
-    var focusPointOffset = PointF(.5f, .5f)
-        set(value) {
-            if (mode != Mode.ANIMATE) {
-                val focusPoint = currentFocusPoint
-                field = value
-
-                // Restore the focus point with the new offset
-                currentFocusPoint = focusPoint
-
-            } else {
-                // Animation will handle the focus offset
-                field = value
-            }
-        }
-
-    var currentFocusPoint: PointF
-        get() = translationToFocusPoint(currentTranslation, currentScale)
-        private set(value) {
-            currentTranslation = focusPointToTranslation(value, currentScale)
-        }
-
     var onChangeListener: OnChangeListener? = null
     var onModeChangeListener: OnModeChangeListener? = null
 
@@ -210,6 +189,35 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
         return true
     }
+
+
+    // region Focus
+
+    var focusPointOffset = PointF(.5f, .5f)
+        private set
+
+    var currentFocusPoint: PointF
+        get() = translationToFocusPoint(currentTranslation, currentScale)
+        private set(value) {
+            currentTranslation = focusPointToTranslation(value, currentScale)
+        }
+
+    fun updateFocusPointOffset(offset: PointF, update: Boolean) {
+        if (update && mode != Mode.ANIMATE) {
+            // Animation will handle the focus offset update
+
+            val focusPoint = currentFocusPoint
+            focusPointOffset = offset
+
+            // Restore the focus point with the new offset
+            currentFocusPoint = focusPoint
+
+        } else {
+            focusPointOffset = offset
+        }
+    }
+
+    // endregion
 
 
     // region Translation

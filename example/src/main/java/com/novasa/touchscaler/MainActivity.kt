@@ -45,7 +45,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         buttonTest.setOnClickListener {
-            touchScaler.focusPointOffset = PointF(.5f, .25f)
+            touchScaler.updateFocusPointOffset(PointF(.5f, .25f), true)
         }
 
         touchScaler.onChangeListener = object : TouchScaler.OnChangeListener {
