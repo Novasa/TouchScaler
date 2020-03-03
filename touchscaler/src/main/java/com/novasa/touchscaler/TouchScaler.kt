@@ -107,11 +107,26 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             }
         }
 
-    val focusPointOffset = PointF(.5f, .5f)
+    var focusPointOffset = PointF(.5f, .5f)
+        set(value) {
+            if (mode != Mode.ANIMATE) {
+                val focusPoint = currentFocusPoint
+                field = value
 
-    val currentFocusPoint: PointF
+                // Restore the focus point with the new offset
+                currentFocusPoint = focusPoint
+
+            } else {
+                // Animation will handle the focus offset
+                field = value
+            }
+        }
+
+    var currentFocusPoint: PointF
         get() = translationToFocusPoint(currentTranslation, currentScale)
-
+        private set(value) {
+            currentTranslation = focusPointToTranslation(value, currentScale)
+        }
 
     var onChangeListener: OnChangeListener? = null
     var onModeChangeListener: OnModeChangeListener? = null

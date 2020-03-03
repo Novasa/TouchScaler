@@ -1,5 +1,6 @@
 package com.novasa.touchscaler
 
+import android.graphics.PointF
 import android.os.Bundle
 import android.util.Log
 import android.util.SizeF
@@ -44,8 +45,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         buttonTest.setOnClickListener {
-            touchScaler.update()
-                .scale(2f)
+            touchScaler.focusPointOffset = PointF(.5f, .25f)
         }
 
         touchScaler.onChangeListener = object : TouchScaler.OnChangeListener {
