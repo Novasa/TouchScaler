@@ -6,7 +6,6 @@ import android.animation.TimeInterpolator
 import android.animation.ValueAnimator
 import android.graphics.PointF
 import android.os.Build
-import android.util.Log
 import android.util.SizeF
 import android.view.*
 import android.view.View.OnTouchListener
@@ -307,10 +306,6 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         translation.x = (currentTranslation.x - focus.x) * scaled + dFocus.x
         translation.y = (currentTranslation.y - focus.y) * scaled + dFocus.y
 
-        if (s1 == scaleMax && translation.x != 0f) {
-            Log.d(TAG, "$ -> $translation")
-        }
-
         if (s1 != currentScale) {
             currentScale = s1
         }
@@ -499,8 +494,6 @@ class TouchScaler(val targetView: View) : OnTouchListener {
                 focusPointToTranslation(p1, s1)
             }
         }
-
-        Log.d(TAG, "Applying update: $update, p1: $p1")
 
         val duration = update.duration ?: 0L
 
