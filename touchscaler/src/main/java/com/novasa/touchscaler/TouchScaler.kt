@@ -131,16 +131,18 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
         when (action) {
             MotionEvent.ACTION_DOWN -> {
-                v.parent.requestDisallowInterceptTouchEvent(true)
-                mode = Mode.DRAG
-                cancelAnimations()
+                startDrag(v)
             }
 
             MotionEvent.ACTION_POINTER_DOWN -> {
                 mode = Mode.ZOOM
             }
 
-            MotionEvent.ACTION_MOVE -> if (mode == Mode.DRAG) {
+            MotionEvent.ACTION_MOVE -> if (mode == Mode.NONE) {
+                // It's possible to receive a move event as the initial event, if the event has been delegated to another view before we receive it.
+                startDrag(v)
+
+            } else if (mode == Mode.DRAG) {
                 translation.x = eventPosition.x - prevEventPosition.x
                 translation.y = eventPosition.y - prevEventPosition.y
             }
@@ -188,6 +190,12 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         prevEventPosition = eventPosition
 
         return true
+    }
+
+    private fun startDrag(v: View) {
+        v.parent.requestDisallowInterceptTouchEvent(true)
+        mode = Mode.DRAG
+        cancelAnimations()
     }
 
 
