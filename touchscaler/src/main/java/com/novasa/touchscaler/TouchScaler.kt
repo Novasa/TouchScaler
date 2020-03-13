@@ -79,10 +79,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             } ?: SizeF(0f, 0f)
 
             updateTranslationBoundaries()
-            currentTranslation = focusPointToTranslation(
-                PointF(contentSize.width * .5f, contentSize.height * .5f),
-                currentScale
-            )
+            currentTranslation = focusPointToTranslation(PointF(contentSize.width * .5f, contentSize.height * .5f), currentScale)
         }
     }
 
@@ -296,13 +293,13 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     private var prevScaleFocus: PointF? = null
 
     private val scaleDetector = ScaleGestureDetector(
-        targetView.context,
-        object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-            override fun onScale(d: ScaleGestureDetector): Boolean {
-                scale(d.scaleFactor, PointF(d.focusX, d.focusY))
-                return true
-            }
-        })
+            targetView.context,
+            object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                override fun onScale(d: ScaleGestureDetector): Boolean {
+                    scale(d.scaleFactor, PointF(d.focusX, d.focusY))
+                    return true
+                }
+            })
 
     private fun scale(factor: Float, focus: PointF) {
         val s0 = currentScale
@@ -339,42 +336,31 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     private val isFlinging: Boolean
         get() = flingX != null || flingY != null
 
-    private val flingDetector =
-        GestureDetector(targetView.context, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onFling(e1: MotionEvent, e2: MotionEvent, vx: Float, vy: Float): Boolean {
-                fling(vx, vy)
-                return true
-            }
-        })
+    private val flingDetector = GestureDetector(targetView.context, object : GestureDetector.SimpleOnGestureListener() {
+        override fun onFling(e1: MotionEvent?, e2: MotionEvent?, vx: Float, vy: Float): Boolean {
+            fling(vx, vy)
+            return true
+        }
+    })
 
     private fun fling(vx: Float, vy: Float) {
         mode = Mode.FLING
 
-        flingX = createFlingAnimation(
-            DynamicAnimation.X,
-            translationMin.x,
-            translationMax.x,
-            vx,
-            onEnd = {
-                flingX = null
-            })
+        flingX = createFlingAnimation(DynamicAnimation.X, translationMin.x, translationMax.x, vx, onEnd = {
+            flingX = null
+        })
 
-        flingY = createFlingAnimation(
-            DynamicAnimation.Y,
-            translationMin.y,
-            translationMax.y,
-            vy,
-            onEnd = {
-                flingY = null
-            })
+        flingY = createFlingAnimation(DynamicAnimation.Y, translationMin.y, translationMax.y, vy, onEnd = {
+            flingY = null
+        })
     }
 
     private fun createFlingAnimation(
-        property: FloatPropertyCompat<View>,
-        min: Float,
-        max: Float,
-        v: Float,
-        onEnd: () -> Unit
+            property: FloatPropertyCompat<View>,
+            min: Float,
+            max: Float,
+            v: Float,
+            onEnd: () -> Unit
     ): FlingAnimation = FlingAnimation(targetView, property).apply {
 
         setMinValue(min)
@@ -473,8 +459,8 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         fun noAnimation() = animate(false)
 
         fun reset() = position(.5f, .5f)
-            .relative()
-            .scale(1f)
+                .relative()
+                .scale(1f)
 
         fun next() = Update().also {
             this.next = it
@@ -624,21 +610,19 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     // region Utility
 
     private fun clamp(v: PointF, min: PointF, max: PointF): PointF =
-        PointF(min(max(v.x, min.x), max.x), min(max(v.y, min.y), max.y))
+            PointF(min(max(v.x, min.x), max.x), min(max(v.y, min.y), max.y))
 
     private fun clamp(v: Float, min: Float, max: Float): Float = min(max(v, min), max)
 
-    private fun focusPointToTranslation(focus: PointF, scale: Float): PointF =
-        PointF().apply {
-            x = -focus.x * scale + focusPointOffset.x * viewSize.width
-            y = -focus.y * scale + focusPointOffset.y * viewSize.height
-        }
+    private fun focusPointToTranslation(focus: PointF, scale: Float): PointF = PointF().apply {
+        x = -focus.x * scale + focusPointOffset.x * viewSize.width
+        y = -focus.y * scale + focusPointOffset.y * viewSize.height
+    }
 
-    private fun translationToFocusPoint(translation: PointF, scale: Float) =
-        PointF().apply {
-            x = -(translation.x - focusPointOffset.x * viewSize.width) / scale
-            y = -(translation.y - focusPointOffset.y * viewSize.height) / scale
-        }
+    private fun translationToFocusPoint(translation: PointF, scale: Float) = PointF().apply {
+        x = -(translation.x - focusPointOffset.x * viewSize.width) / scale
+        y = -(translation.y - focusPointOffset.y * viewSize.height) / scale
+    }
 
     // endregion
 }
