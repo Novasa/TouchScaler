@@ -18,9 +18,14 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val touchScaler = TouchScaler(targetView)
+        val touchScaler = TouchScaler(targetView).apply {
+//            setContentSizeWithImageViewDrawable()
 
-        touchScaler.setContentSizeWithImageViewDrawable()
+            scaleMin = .5f
+            scaleSettleMin = 1f
+            scaleMax = 5f
+            scaleSettleMax = 3f
+        }
 
         contentView.setOnTouchListener(touchScaler)
 
