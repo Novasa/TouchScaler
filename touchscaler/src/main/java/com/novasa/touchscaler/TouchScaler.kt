@@ -45,7 +45,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
     enum class Mode {
         NONE,
         DRAG,
-        ZOOM,
+        SCALE,
         FLING,
         ANIMATE
     }
@@ -132,7 +132,7 @@ class TouchScaler(val targetView: View) : OnTouchListener {
             }
 
             MotionEvent.ACTION_POINTER_DOWN -> {
-                mode = Mode.ZOOM
+                mode = Mode.SCALE
             }
 
             MotionEvent.ACTION_MOVE -> if (mode == Mode.NONE) {
