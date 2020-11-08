@@ -10,6 +10,7 @@ import android.util.SizeF
 import android.view.*
 import android.view.View.OnTouchListener
 import android.view.animation.DecelerateInterpolator
+import android.widget.ImageView
 import androidx.core.graphics.plus
 import androidx.core.view.doOnLayout
 import androidx.dynamicanimation.animation.DynamicAnimation
@@ -50,6 +51,10 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         ANIMATE
     }
 
+    /**
+     * The size of the target content that is being scaled. This can be set manually, if the
+     * content is larger than the view port. Default will be the view port size.
+     */
     var contentSize: SizeF = SIZE_NONE
         set(value) {
             field = SizeF(value.width, value.height)
@@ -58,10 +63,36 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
     private var viewSize: SizeF = SIZE_NONE
 
+    var mode: Mode = Mode.NONE
+        private set(value) {
+            if (value != field) {
+                field = value
+                onModeChangeListener?.onTouchScalerModeChange(this, value)
+            }
+        }
+
+    var onChangeListener: OnChangeListener? = null
+    var onModeChangeListener: OnModeChangeListener? = null
+
+    init {
+        targetView.apply {
+            pivotX = 0f
+            pivotY = 0f
+
+            (parent as? ViewGroup)?.clipChildren = false
+        }
+
+        updateSize()
+    }
+
     private fun updateSize() {
         if (contentSize.width == 0f || contentSize.height == 0f) {
             targetView.doOnLayout {
-                contentSize = SizeF(targetView.width.toFloat(), targetView.height.toFloat())
+
+                // Gotta check again, it could have been set manually before layout
+                if (contentSize.width == 0f || contentSize.height == 0f) {
+                    contentSize = SizeF(targetView.width.toFloat(), targetView.height.toFloat())
+                }
             }
             return
         }
@@ -83,28 +114,13 @@ class TouchScaler(val targetView: View) : OnTouchListener {
         }
     }
 
-    init {
-        targetView.apply {
-            pivotX = 0f
-            pivotY = 0f
-
-            (parent as? ViewGroup)?.clipChildren = false
-        }
-
-        updateSize()
-    }
-
-
-    var mode: Mode = Mode.NONE
-        private set(value) {
-            if (value != field) {
-                field = value
-                onModeChangeListener?.onTouchScalerModeChange(this, value)
+    fun setContentSizeWithImageViewDrawable() {
+        if (targetView is ImageView) {
+            contentSize = with(targetView.drawable) {
+                SizeF(intrinsicWidth.toFloat(), intrinsicHeight.toFloat())
             }
         }
-
-    var onChangeListener: OnChangeListener? = null
-    var onModeChangeListener: OnModeChangeListener? = null
+    }
 
     private fun notifyChange() {
         onChangeListener?.onTouchScalerChange(this)
@@ -279,6 +295,9 @@ class TouchScaler(val targetView: View) : OnTouchListener {
 
     var scaleMin = DEFAULT_SCALE_MIN
     var scaleMax = DEFAULT_SCALE_MAX
+
+    var scaleSettleMin = DEFAULT_SCALE_MIN
+    var scaleSettleMax = DEFAULT_SCALE_MAX
 
     var currentScale: Float
         get() = targetView.scaleX

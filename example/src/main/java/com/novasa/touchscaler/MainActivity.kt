@@ -20,9 +20,7 @@ class MainActivity : AppCompatActivity() {
 
         val touchScaler = TouchScaler(targetView)
 
-        touchScaler.contentSize = with(targetView.drawable) {
-            SizeF(intrinsicWidth.toFloat(), intrinsicHeight.toFloat())
-        }
+        touchScaler.setContentSizeWithImageViewDrawable()
 
         contentView.setOnTouchListener(touchScaler)
 
